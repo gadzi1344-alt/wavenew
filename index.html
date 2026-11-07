@@ -223,7 +223,18 @@
 // ---------- Подключение к Supabase ----------
 const SUPABASE_URL = 'https://ruwgepjzfxkdruqdxvfp.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_zLy_AdJpkGd_dVC8b64frQ_97DaIYA9';
-const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+function showFatal(msg) {
+  const b = document.createElement('div');
+  b.style.cssText = 'position:fixed;left:12px;right:12px;bottom:12px;z-index:99;background:#2a1212;color:#ffb3b3;padding:14px 16px;border-radius:12px;font:14px system-ui,sans-serif;white-space:pre-wrap;box-shadow:0 12px 30px #000a';
+  b.textContent = msg;
+  document.body.appendChild(b);
+}
+window.addEventListener('error', (e) => showFatal('Ошибка скрипта: ' + e.message));
+window.addEventListener('unhandledrejection', (e) => showFatal('Ошибка: ' + (e.reason?.message || e.reason)));
+const sb = (typeof supabase !== 'undefined')
+  ? supabase.createClient(SUPABASE_URL, SUPABASE_KEY)
+  : null;
+if (!sb) showFatal('Не загрузилась библиотека Supabase. Проверьте интернет и обновите страницу (Ctrl+F5).');
 
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
@@ -326,6 +337,7 @@ function renderGate(mode) {
     <input class="field" id="aname" placeholder="Имя (латиница, цифры, _ . -)" autocomplete="username">
     <input class="field" id="apass" type="password" placeholder="Пароль (минимум 6 символов)" autocomplete="${reg ? 'new-password' : 'current-password'}">
     <input class="field" id="acode" placeholder="Код администратора (только для админа)" style="display:${reg ? 'block' : 'none'}">
+    <div class="sub" id="gateErr" style="color:#d97070;min-height:16px"></div>
     <button class="pill on" id="authGo">${reg ? 'Зарегистрироваться' : 'Войти'}</button>
     <button class="pill" id="authSwitch">${reg ? 'Уже есть аккаунт? Войти' : 'Нет аккаунта? Регистрация'}</button>
   </div></div>`;
@@ -335,6 +347,7 @@ async function authSubmit() {
   const password = $('#apass').value;
   if (!/^[a-z0-9_.\-]{3,20}$/.test(name)) throw new Error('Имя: 3–20 символов, латиница, цифры, _ . -');
   if (password.length < 6) throw new Error('Пароль: минимум 6 символов');
+  if (!sb) throw new Error('Нет связи с Supabase. Обновите страницу.');
   const email = `${name}@wave.app`;
   if (gateMode === 'reg') {
     const { error } = await sb.auth.signUp({ email, password, options: { data: { name, code: $('#acode').value } } });
@@ -630,7 +643,17 @@ async function saveAdmin(name) {
 document.addEventListener('click', async (e) => {
   const t = (sel) => e.target.closest(sel);
   try {
-    if (t('#authGo')) return authSubmit();
+    if (t('#authGo')) {
+      const err = $('#gateErr');
+      if (err) err.textContent = 'Отправляю…';
+      try {
+        await authSubmit();
+      } catch (er) {
+        if (err) err.textContent = er.message;
+        toast(er.message);
+      }
+      return;
+    }
     if (t('#authSwitch')) return renderGate(gateMode === 'reg' ? 'login' : 'reg');
     if (t('[data-go]')) return go({ name: t('[data-go]').dataset.go, tab: 'all', user: null });
     if (t('#newBtn') || t('#tabNew')) { go({ name: 'feed', tab: 'all' }); setTimeout(() => $('#ptext')?.focus(), 200); return; }
@@ -710,7 +733,7 @@ document.addEventListener('input', (e) => {
 // ---------- Старт ----------
 sb.auth.onAuthStateChange(async () => { await loadMe(); });
 (async () => {
-  await loadMe();
+  try { await loadMe(); } catch (e) { showFatal('Не удалось проверить вход: ' + e.message); }
   go({ name: 'feed', tab: 'all' });
 })();
 
