@@ -148,3 +148,92 @@ create policy "media delete own folder" on storage.objects for delete to authent
   using (bucket_id = 'media' and ((storage.foldername(name))[1] = auth.uid()::text or is_admin()));
 
 notify pgrst, 'reload schema';
+-- ===== Быстрая лента: один запрос вместо пяти. Запусти этот блок в SQL Editor =====
+create or replace function get_feed(p_before bigint, p_user uuid, p_only_follow boolean)
+returns jsonb
+language sql stable security invoker set search_path = public as $$
+  select coalesce(jsonb_agg(to_jsonb(t) order by t.id desc), '[]'::jsonb) from (
+    select p.id, p.text, p.image_url as image, p.views, p.created_at as created, p.user_id,
+           pr.name as author_name, pr.verified as author_verified,
+           pr.badges as author_badges, pr.avatar_url as author_avatar,
+           (select count(*) from likes l where l.post_id = p.id) as likes,
+           (select count(*) from comments c where c.post_id = p.id) as comments,
+           exists (select 1 from likes l where l.post_id = p.id and l.user_id = p_user) as liked
+      from posts p
+      join profiles pr on pr.id = p.user_id
+     where (p_before is null or p.id < p_before)
+       and (not p_only_follow or p.user_id in (select followee_id from follows where follower_id = p_user))
+     order by p.id desc
+     limit 20
+  ) t;
+$$;
+grant execute on function get_feed(bigint, uuid, boolean) to anon, authenticated;
+notify pgrst, 'reload schema';
+-- ===== Быстрые страницы: профиль и пост одним запросом. Запусти этот блок в SQL Editor =====
+create or replace function post_json(p_id bigint, p_user uuid)
+returns jsonb language sql stable security invoker set search_path = public as $$
+  select to_jsonb(t) from (
+    select p.id, p.text, p.image_url as image, p.views, p.created_at as created, p.user_id,
+           pr.name as author_name, pr.verified as author_verified,
+           pr.badges as author_badges, pr.avatar_url as author_avatar,
+           (select count(*) from likes l where l.post_id = p.id) as likes,
+           (select count(*) from comments c where c.post_id = p.id) as comments,
+           exists (select 1 from likes l where l.post_id = p.id and l.user_id = p_user) as liked
+      from posts p join profiles pr on pr.id = p.user_id
+     where p.id = p_id
+  ) t;
+$$;
+
+create or replace function get_post_page(p_id bigint, p_user uuid)
+returns jsonb language sql stable security invoker set search_path = public as $$
+  select jsonb_build_object(
+    'post', post_json(p_id, p_user),
+    'comments', coalesce((
+      select jsonb_agg(to_jsonb(c) order by c.id) from (
+        select cm.id, cm.text, cm.created_at as created,
+               pr.name as author_name, pr.verified as author_verified,
+               pr.badges as author_badges, pr.avatar_url as author_avatar
+          from comments cm join profiles pr on pr.id = cm.user_id
+         where cm.post_id = p_id
+      ) c), '[]'::jsonb)
+  );
+$$;
+
+create or replace function get_profile_page(p_name text, p_user uuid, p_before bigint)
+returns jsonb language sql stable security invoker set search_path = public as $$
+  select jsonb_build_object(
+    'user', (select to_jsonb(u) from (
+               select id, name, bio, verified, badges, avatar_url from profiles where lower(name) = lower(p_name)
+             ) u),
+    'followers', (select count(*) from follows f join profiles pr on pr.id = f.followee_id where lower(pr.name) = lower(p_name)),
+    'following', (select count(*) from follows f join profiles pr on pr.id = f.follower_id where lower(pr.name) = lower(p_name)),
+    'posts_count', (select count(*) from posts p join profiles pr on pr.id = p.user_id where lower(pr.name) = lower(p_name)),
+    'is_following', exists (select 1 from follows f join profiles pr on pr.id = f.followee_id
+                             where lower(pr.name) = lower(p_name) and f.follower_id = p_user),
+    'posts', coalesce((
+      select jsonb_agg(to_jsonb(t) order by t.id desc) from (
+        select p.id, p.text, p.image_url as image, p.views, p.created_at as created, p.user_id,
+               pr.name as author_name, pr.verified as author_verified,
+               pr.badges as author_badges, pr.avatar_url as author_avatar,
+               (select count(*) from likes l where l.post_id = p.id) as likes,
+               (select count(*) from comments c where c.post_id = p.id) as comments,
+               exists (select 1 from likes l where l.post_id = p.id and l.user_id = p_user) as liked
+          from posts p join profiles pr on pr.id = p.user_id
+         where lower(pr.name) = lower(p_name) and (p_before is null or p.id < p_before)
+         order by p.id desc limit 20
+      ) t), '[]'::jsonb)
+  );
+$$;
+
+grant execute on function post_json(bigint, uuid) to anon, authenticated;
+grant execute on function get_post_page(bigint, uuid) to anon, authenticated;
+grant execute on function get_profile_page(text, uuid, bigint) to anon, authenticated;
+notify pgrst, 'reload schema';
+
+-- ===== Индексы для быстрых запросов (запусти один раз) =====
+create index if not exists posts_user_id_idx on posts (user_id, id desc);
+create index if not exists posts_id_desc_idx on posts (id desc);
+create index if not exists likes_post_idx on likes (post_id);
+create index if not exists comments_post_idx on comments (post_id);
+create index if not exists follows_followee_idx on follows (followee_id);
+create index if not exists follows_follower_idx on follows (follower_id);
