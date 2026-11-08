@@ -244,7 +244,7 @@ const BADGE_LABEL = { star: 'Звезда', fire: 'Огонь', heart: 'Серд
 const HEART = '<svg viewBox="0 0 24 24"><path d="M12 20.5s-7.5-4.6-9.6-9.2C.9 8.2 2.8 4.5 6.6 4.5c2.3 0 3.8 1.3 5.4 3.1 1.6-1.8 3.1-3.1 5.4-3.1 3.8 0 5.7 3.7 4.2 6.8-2.1 4.6-9.6 9.2-9.6 9.2z"/></svg>';
 const COMMENT = '<svg viewBox="0 0 24 24"><path d="M21 12a8 8 0 0 1-11.5 7.2L4 20l1-4.6A8 8 0 1 1 21 12z"/></svg>';
 const EYE = '<svg viewBox="0 0 24 24"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>';
-const POST_COLS = 'id,text,image_url,views,created_at,user_id,profiles(name,verified,badges,avatar_url),likes(count),comments(count)';
+const POST_COLS = 'id,text,image_url,views,created_at,user_id';
 
 let me = null;
 let route = { name: 'feed', tab: 'all' };
@@ -275,25 +275,47 @@ function toast(msg) {
   toast.t = setTimeout(() => (t.style.display = 'none'), 3200);
 }
 const mapUser = (p) => p ? { id: p.id, name: p.name, bio: p.bio || '', verified: !!p.verified, badges: p.badges || [], avatar: p.avatar_url || '' } : { name: '?', verified: false, badges: [], avatar: '' };
-const mapPost = (r, likedSet) => ({
+const mapPost = (r, x) => ({
   id: r.id, text: r.text || '', image: r.image_url || '', views: r.views || 0,
   created: new Date(r.created_at).getTime() / 1000,
-  likes: r.likes?.[0]?.count ?? 0, comments: r.comments?.[0]?.count ?? 0,
-  liked: likedSet.has(r.id),
+  likes: x.likes, comments: x.comments, liked: x.liked.has(r.id),
   can: !!me && (me.admin || r.user_id === me.id),
-  author: mapUser(r.profiles),
+  author: mapUser(x.profile),
 });
 
 // Загружает посты с авторами, счётчиками и отметкой «мой лайк»
+async function profilesById(ids) {
+  const m = new Map();
+  if (!ids.length) return m;
+  const { data } = await sb.from('profiles').select('id,name,verified,badges,avatar_url').in('id', ids);
+  (data || []).forEach((p) => m.set(p.id, p));
+  return m;
+}
+function countBy(rows) {
+  const m = new Map();
+  (rows || []).forEach((r) => m.set(r.post_id, (m.get(r.post_id) || 0) + 1));
+  return m;
+}
 async function postsWith(query) {
   const { data, error } = await query;
   if (error) throw new Error(error.message);
-  let liked = new Set();
-  if (me && data.length) {
-    const { data: lk } = await sb.from('likes').select('post_id').eq('user_id', me.id).in('post_id', data.map((p) => p.id));
-    liked = new Set((lk || []).map((l) => l.post_id));
-  }
-  return data.map((r) => mapPost(r, liked));
+  if (!data.length) return [];
+  const ids = data.map((p) => p.id);
+  const [pm, lk, cm, my] = await Promise.all([
+    profilesById([...new Set(data.map((p) => p.user_id))]),
+    sb.from('likes').select('post_id').in('post_id', ids),
+    sb.from('comments').select('post_id').in('post_id', ids),
+    me ? sb.from('likes').select('post_id').eq('user_id', me.id).in('post_id', ids) : Promise.resolve({ data: [] }),
+  ]);
+  const likeCount = countBy(lk.data);
+  const commentCount = countBy(cm.data);
+  const liked = new Set((my.data || []).map((l) => l.post_id));
+  return data.map((r) => mapPost(r, {
+    profile: pm.get(r.user_id),
+    likes: likeCount.get(r.id) || 0,
+    comments: commentCount.get(r.id) || 0,
+    liked,
+  }));
 }
 
 let needName = false;
@@ -509,8 +531,9 @@ function watchViews(root) {
 async function renderPost(id) {
   const [post] = await postsWith(sb.from('posts').select(POST_COLS).eq('id', id));
   if (!post) throw new Error('Пост не найден');
-  const { data: cm } = await sb.from('comments').select('id,text,created_at,profiles(name,verified,badges,avatar_url)').eq('post_id', id).order('id');
-  const comments = (cm || []).map((c) => ({ id: c.id, text: c.text, created: new Date(c.created_at).getTime() / 1000, author: mapUser(c.profiles) }));
+  const { data: cm } = await sb.from('comments').select('id,text,created_at,user_id').eq('post_id', id).order('id');
+  const pm = await profilesById([...new Set((cm || []).map((c) => c.user_id))]);
+  const comments = (cm || []).map((c) => ({ id: c.id, text: c.text, created: new Date(c.created_at).getTime() / 1000, author: mapUser(pm.get(c.user_id)) }));
   $('#main').innerHTML = `<div class="col">
     <button class="pill" data-go="feed" style="margin-bottom:14px">← Назад</button>
     ${postCard(post).replace(`data-open="${post.id}"`, '')}
