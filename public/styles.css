@@ -178,3 +178,102 @@
     aside{position:relative;justify-content:center;padding:0}
     .brand{position:absolute;top:24px;left:0;right:0;padding:0;text-align:center}
   }
+
+/* ===================== v2: анимации, акценты, сайдбар ===================== */
+:root{
+  --accent:#7c6cff;
+  --accent2:#22d3ee;
+  --grad:linear-gradient(135deg,#7c6cff 0%,#22d3ee 100%);
+  --spring:cubic-bezier(.34,1.56,.64,1);
+}
+
+/* Логотип с бегущим градиентом */
+.brand{
+  background:linear-gradient(90deg,#ffffff,var(--accent2),var(--accent),#ffffff);
+  background-size:300% auto;
+  -webkit-background-clip:text;background-clip:text;color:transparent;
+  animation:shine 7s linear infinite;
+}
+@keyframes shine{to{background-position:300% center}}
+
+/* Сайдбар (компьютер): иконка заметно растёт при наведении и выборе */
+.nav button{position:relative;animation:navIn .6s var(--ease) both}
+.nav button:nth-child(2){animation-delay:70ms}
+.nav button:nth-child(3){animation-delay:140ms}
+.nav button:nth-child(4){animation-delay:210ms}
+@keyframes navIn{from{opacity:0;transform:translateX(-10px) scale(.8)}to{opacity:1;transform:none}}
+.nav button:hover{background:#ffffff14}
+.nav button svg,.tabbar button svg{transition:transform .45s var(--spring)}
+.nav button:hover svg{transform:scale(1.28) rotate(-6deg)}
+.nav button:active svg,.tabbar button:active svg{transform:scale(.88)}
+.nav button.active{
+  background:var(--grad);color:#fff;
+  box-shadow:0 10px 26px -8px #7c6cff99,inset 0 0 0 1px #ffffff26;
+}
+.nav button.active svg{transform:scale(1.16)}
+.nav button.active:hover svg{transform:scale(1.3) rotate(-6deg)}
+/* точка под активным пунктом */
+.nav button::after{
+  content:"";position:absolute;bottom:-6px;left:50%;width:4px;height:4px;margin-left:-2px;
+  border-radius:50%;background:var(--accent2);opacity:0;transform:scale(0);
+  transition:transform .4s var(--spring),opacity .3s;
+}
+.nav button.active::after{opacity:0}
+
+/* Нижняя панель (телефон) */
+.tabbar button.active svg{transform:scale(1.22)}
+.tabbar button{transition:color .3s}
+.tabbar button.active .ic{background:var(--grad);box-shadow:0 8px 20px -6px #7c6cff99}
+.tabbar .mid .ic{background:var(--grad);color:#fff}
+.tabbar .mid svg{stroke:#fff}
+.tabbar button:not(.mid):hover .ic{background:#ffffff14}
+
+/* Галочка: мягкое свечение и поворот при наведении */
+.vf{position:relative;transition:transform .4s var(--spring)}
+.vf svg{filter:drop-shadow(0 0 6px #7c6cff66);transition:transform .5s var(--spring)}
+.vf:hover svg{transform:scale(1.25) rotate(12deg)}
+.vf{animation:vfIn .6s var(--spring) both}
+@keyframes vfIn{from{transform:scale(0) rotate(-40deg)}to{transform:none}}
+
+/* Карточки и списки */
+.urow{transition:transform .35s var(--ease),border-color .25s,background .25s}
+.urow:hover{transform:translateX(4px);border-color:#2c2c44;background:var(--surface2)}
+.card{border-radius:22px}
+.card:hover{border-color:#2a2a3c}
+.acts2 button svg,.acts2 span svg{transition:transform .35s var(--spring)}
+.acts2 button:hover svg{transform:scale(1.25)}
+.pill,.buy,.chip,.switch,.attach{transition:background .25s,color .25s,transform .25s var(--spring),box-shadow .3s,border-color .25s}
+.pill:hover{transform:translateY(-1px);box-shadow:0 8px 20px -10px #7c6cff88}
+.pill.on:hover{box-shadow:0 10px 26px -8px #7c6cff99}
+.pill.on{background:var(--grad);color:#fff;border-color:transparent}
+.pills button.on{background:var(--grad);color:#fff}
+.newbtn{background:var(--grad);color:#fff;box-shadow:0 10px 26px -10px #7c6cff}
+.newbtn:hover{box-shadow:0 14px 30px -8px #7c6cff}
+.chip:hover{transform:scale(1.08)}
+.chip.on{transform:scale(1.04)}
+.switch.on{background:var(--grad);color:#fff;border-color:transparent}
+
+/* Поля ввода */
+.field:focus{border-color:var(--accent);box-shadow:0 0 0 4px #7c6cff26}
+
+/* Аватар и обложка профиля */
+.av{box-shadow:0 0 0 2px var(--bg)}
+.card:hover .av{box-shadow:0 0 0 2px var(--bg),0 0 0 4px #7c6cff40}
+
+/* Всплывающие уведомления */
+.toast{animation:toastIn .5s var(--spring) both;box-shadow:0 14px 40px -10px #000c}
+@keyframes toastIn{from{opacity:0;transform:translateY(-12px) scale(.94)}to{opacity:1;transform:none}}
+
+/* Экран входа */
+.gate-logo{background:var(--grad);color:#fff;box-shadow:0 14px 34px -10px #7c6cff;animation:floaty 4s ease-in-out infinite}
+@keyframes floaty{0%,100%{transform:translateY(0) rotate(0)}50%{transform:translateY(-6px) rotate(-4deg)}}
+.gate-card{box-shadow:0 30px 80px -30px #000}
+
+/* Плавный фон при прокрутке и выделение текста */
+::selection{background:#7c6cff55}
+main{scrollbar-width:thin;scrollbar-color:#2a2a2a transparent}
+
+/* Уважаем настройку «уменьшить движение» */
+@media (prefers-reduced-motion: reduce){
+  *,*::before,*::after{animation-duration:.01ms !important;animation-iteration-count:1 !important;transition-duration:.01ms !important}
+}

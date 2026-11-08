@@ -1,6 +1,6 @@
 // Сервис-воркер: сеть в первую очередь, офлайн — из кэша оболочки.
 // Версию кэша меняйте при изменении статики, чтобы у пользователей обновился интерфейс.
-const CACHE = 'wave-v3';
+const CACHE = 'wave-v4';
 const SHELL = ['/', '/styles.css', '/app.js', '/config.js', '/manifest.json', '/icon-192.png', '/icon-512.png'];
 
 self.addEventListener('install', (e) => {

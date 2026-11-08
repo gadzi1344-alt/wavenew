@@ -37,7 +37,7 @@ const hue = (s) => [...s].reduce((h, c) => (h * 31 + c.charCodeAt(0)) % 360, 0);
 const av = (u, cls = 'av') => u.avatar
   ? `<div class="${cls}" style="background-image:url('${esc(u.avatar)}')"></div>`
   : `<div class="${cls}" style="background:linear-gradient(135deg,hsl(${hue(u.name)} 60% 50%),hsl(${hue(u.name) + 50} 60% 30%))">${esc(u.name[0].toUpperCase())}</div>`;
-const VERIFIED_SVG = '<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M22.70,12.00 L22.57,12.52 L22.21,13.01 L21.67,13.43 L21.02,13.79 L20.37,14.10 L19.79,14.36 L19.36,14.63 L19.11,14.95 L19.06,15.34 L19.18,15.84 L19.40,16.43 L19.65,17.11 L19.85,17.82 L19.93,18.51 L19.84,19.11 L19.57,19.57 L19.11,19.84 L18.51,19.93 L17.82,19.85 L17.11,19.65 L16.43,19.40 L15.84,19.18 L15.34,19.06 L14.95,19.11 L14.63,19.36 L14.36,19.79 L14.10,20.37 L13.79,21.02 L13.43,21.67 L13.01,22.21 L12.52,22.57 L12.00,22.70 L11.48,22.57 L10.99,22.21 L10.57,21.67 L10.21,21.02 L9.90,20.37 L9.64,19.79 L9.37,19.36 L9.05,19.11 L8.66,19.06 L8.16,19.18 L7.57,19.40 L6.89,19.65 L6.18,19.85 L5.49,19.93 L4.89,19.84 L4.43,19.57 L4.16,19.11 L4.07,18.51 L4.15,17.82 L4.35,17.11 L4.60,16.43 L4.82,15.84 L4.94,15.34 L4.89,14.95 L4.64,14.63 L4.21,14.36 L3.63,14.10 L2.98,13.79 L2.33,13.43 L1.79,13.01 L1.43,12.52 L1.30,12.00 L1.43,11.48 L1.79,10.99 L2.33,10.57 L2.98,10.21 L3.63,9.90 L4.21,9.64 L4.64,9.37 L4.89,9.05 L4.94,8.66 L4.82,8.16 L4.60,7.57 L4.35,6.89 L4.15,6.18 L4.07,5.49 L4.16,4.89 L4.43,4.43 L4.89,4.16 L5.49,4.07 L6.18,4.15 L6.89,4.35 L7.57,4.60 L8.16,4.82 L8.66,4.94 L9.05,4.89 L9.37,4.64 L9.64,4.21 L9.90,3.63 L10.21,2.98 L10.57,2.33 L10.99,1.79 L11.48,1.43 L12.00,1.30 L12.52,1.43 L13.01,1.79 L13.43,2.33 L13.79,2.98 L14.10,3.63 L14.36,4.21 L14.63,4.64 L14.95,4.89 L15.34,4.94 L15.84,4.82 L16.43,4.60 L17.11,4.35 L17.82,4.15 L18.51,4.07 L19.11,4.16 L19.57,4.43 L19.84,4.89 L19.93,5.49 L19.85,6.18 L19.65,6.89 L19.40,7.57 L19.18,8.16 L19.06,8.66 L19.11,9.05 L19.36,9.37 L19.79,9.64 L20.37,9.90 L21.02,10.21 L21.67,10.57 L22.21,10.99 L22.57,11.48 Z" fill="#45A1DB"/><path d="M7.4 12.6l3.1 3.1 6.1-6.2" fill="none" stroke="#fff" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+const VERIFIED_SVG = '<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="vfg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#a78bfa"/><stop offset="1" stop-color="#22d3ee"/></linearGradient></defs><polygon points="12.00,1.60 14.30,3.40 17.20,2.99 18.29,5.71 21.01,6.80 20.60,9.70 22.40,12.00 20.60,14.30 21.01,17.20 18.29,18.29 17.20,21.01 14.30,20.60 12.00,22.40 9.70,20.60 6.80,21.01 5.71,18.29 2.99,17.20 3.40,14.30 1.60,12.00 3.40,9.70 2.99,6.80 5.71,5.71 6.80,2.99 9.70,3.40" fill="url(#vfg)" stroke="url(#vfg)" stroke-width="1.2" stroke-linejoin="round"/><path d="M7.9 12.4l2.7 2.7 5.5-5.6" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 const verify = (u) => u.verified ? `<span class="vf" title="Подтверждённый аккаунт">${VERIFIED_SVG}</span>` : '';
 const badges = (u) => (u.badges || []).map((b) => `<span class="bd" title="${esc(BADGE_LABEL[b] || '')}">${BADGE[b] || ''}</span>`).join('');
 const ago = (ts) => {
@@ -108,7 +108,13 @@ async function loadMe() {
 }
 
 // ---------- Маршруты ----------
-function go(r) { route = r; render(); }
+function go(r) {
+  route = r;
+  // перезапускаем плавное появление страницы при каждом переходе
+  const m = $('#main');
+  if (m) { m.style.animation = 'none'; void m.offsetWidth; m.style.animation = ''; }
+  render();
+}
 function setActive() {
   const key = route.name === 'profile' || route.name === 'admin' ? 'profile' : route.name === 'post' ? 'feed' : route.name;
   $$('#nav button, #tabbar button').forEach((b) => b.classList.toggle('active', b.dataset.go === key));
