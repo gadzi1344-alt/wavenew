@@ -438,22 +438,30 @@ async function loadFeed() {
   const first = !feedBefore;
   const show = (html) => { const el = $('#feed'); if (el) el.innerHTML = html; };
   try {
-    let q = sb.from('posts').select(POST_COLS).order('id', { ascending: false }).limit(FEED_LIMIT);
-    if (feedBefore) q = q.lt('id', feedBefore);
-    if (route.tab === 'follow') {
-      if (!me) throw new Error('Войдите, чтобы видеть подписки');
-      const { data: f } = await sb.from('follows').select('followee_id').eq('follower_id', me.id);
-      const ids = (f || []).map((x) => x.followee_id);
-      if (!ids.length) { if (first) show('<p class="sub center">Подпишитесь на людей, чтобы видеть их посты</p>'); return; }
-      q = q.in('user_id', ids);
-    }
-    const posts = await postsWith(q);
+    if (route.tab === 'follow' && !me) throw new Error('Войдите, чтобы видеть подписки');
+    // Один запрос к базе: посты, авторы, лайки, комментарии и мои лайки
+    const { data, error } = await sb.rpc('get_feed', {
+      p_before: feedBefore,
+      p_user: me ? me.id : null,
+      p_only_follow: route.tab === 'follow',
+    });
+    if (error) throw new Error(error.message);
+    const posts = (data || []).map((r) => ({
+      id: r.id, text: r.text || '', image: r.image || '', views: r.views || 0,
+      created: new Date(r.created).getTime() / 1000,
+      likes: Number(r.likes), comments: Number(r.comments), liked: !!r.liked,
+      can: !!me && (me.admin || r.user_id === me.id),
+      author: { name: r.author_name, verified: !!r.author_verified, badges: r.author_badges || [], avatar: r.author_avatar || '' },
+    }));
     const feedEl = $('#feed');
     if (!feedEl) return;
     if (first) feedEl.innerHTML = '';
-    if (first && !posts.length) feedEl.innerHTML = '<p class="sub center">Пока пусто. Напишите первый пост!</p>';
-    else feedEl.insertAdjacentHTML('beforeend', posts.map(postCard).join(''));
-    watchViews(feedEl);
+    if (first && !posts.length) {
+      feedEl.innerHTML = `<p class="sub center">${route.tab === 'follow' ? 'Подпишитесь на людей, чтобы видеть их посты' : 'Пока пусто. Напишите первый пост!'}</p>`;
+    } else {
+      feedEl.insertAdjacentHTML('beforeend', posts.map(postCard).join(''));
+      watchViews(feedEl);
+    }
     feedBefore = posts.length ? posts[posts.length - 1].id : feedBefore;
     const more = $('#moreBox');
     if (more) more.innerHTML = posts.length >= FEED_LIMIT ? '<button class="pill" data-more>Показать ещё</button>' : '';
