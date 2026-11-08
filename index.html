@@ -296,11 +296,13 @@ async function postsWith(query) {
   return data.map((r) => mapPost(r, liked));
 }
 
+let needName = false;
 async function loadMe() {
   const { data } = await sb.auth.getSession();
-  if (!data.session) { me = null; return; }
+  if (!data.session) { me = null; needName = false; return; }
   const { data: p } = await sb.from('profiles').select('*').eq('id', data.session.user.id).single();
   me = p ? { ...mapUser(p), admin: p.name === 'bibnaq' } : null;
+  needName = !p;
 }
 
 // ---------- Маршруты ----------
@@ -311,7 +313,7 @@ function setActive() {
 }
 async function render() {
   document.body.classList.toggle('gate', !me);
-  if (!me) return renderGate('reg');
+  if (!me) return needName ? renderNameChoice() : renderGate();
   setActive();
   try {
     if (route.name === 'feed') await renderFeed();
@@ -326,47 +328,41 @@ async function render() {
 }
 
 // ---------- Вход и регистрация ----------
-function renderGate(mode) {
-  gateMode = mode || gateMode;
-  const reg = gateMode === 'reg';
+function renderGate() {
   document.body.classList.add('gate');
   $('#main').innerHTML = `<div class="gate-wrap"><div class="card gate-card">
     <div class="gate-logo">W</div>
-    <h2>${reg ? 'Регистрация' : 'Вход'}</h2>
-    <p class="sub">${reg ? 'Создайте аккаунт, чтобы смотреть ленту и писать посты' : 'Войдите в свой аккаунт'}</p>
-    <input class="field" id="aname" placeholder="Имя (латиница, цифры, _ . -)" autocomplete="username">
-    <input class="field" id="apass" type="password" placeholder="Пароль (минимум 6 символов)" autocomplete="${reg ? 'new-password' : 'current-password'}">
-    <input class="field" id="acode" placeholder="Код администратора (только для админа)" style="display:${reg ? 'block' : 'none'}">
+    <h2>Добро пожаловать</h2>
+    <p class="sub">Войдите, чтобы смотреть ленту и писать посты</p>
+    <button class="pill on" data-oauth="google">Войти через Google</button>
+    <button class="pill" data-oauth="github">Войти через GitHub</button>
     <div class="sub" id="gateErr" style="color:#d97070;min-height:16px"></div>
-    <button class="pill on" id="authGo">${reg ? 'Зарегистрироваться' : 'Войти'}</button>
-    <button class="pill" id="authSwitch">${reg ? 'Уже есть аккаунт? Войти' : 'Нет аккаунта? Регистрация'}</button>
   </div></div>`;
 }
-async function authSubmit() {
+function renderNameChoice() {
+  document.body.classList.add('gate');
+  $('#main').innerHTML = `<div class="gate-wrap"><div class="card gate-card">
+    <div class="gate-logo">W</div>
+    <h2>Выберите логин</h2>
+    <p class="sub">Так вас будут видеть в ленте. Латиница, цифры, _ . - (3–20 символов). Потом логин не меняется.</p>
+    <input class="field" id="aname" placeholder="Логин" autocomplete="off">
+    <input class="field" id="acode" placeholder="Код администратора (только для админа)" autocomplete="off">
+    <div class="sub" id="gateErr" style="color:#d97070;min-height:16px"></div>
+    <button class="pill on" id="nameGo">Сохранить</button>
+    <button class="pill" data-logout="1">Выйти</button>
+  </div></div>`;
+}
+async function oauthLogin(provider) {
+  const { error } = await sb.auth.signInWithOAuth({ provider, options: { redirectTo: location.origin + location.pathname } });
+  if (error) throw new Error(error.message);
+}
+async function saveName() {
   const name = $('#aname').value.trim().toLowerCase();
-  const password = $('#apass').value;
-  const code = $('#acode')?.value || '';
-  if (!/^[a-z0-9_.\-]{3,20}$/.test(name)) throw new Error('Имя: 3–20 символов, латиница, цифры, _ . -');
-  if (password.length < 6) throw new Error('Пароль: минимум 6 символов');
-  if (!sb) throw new Error('Нет связи с Supabase. Обновите страницу.');
-  const email = `${name}@wave.app`;
-  if (gateMode === 'reg') {
-    const { error } = await sb.auth.signUp({ email, password, options: { data: { name, code } } });
-    if (error) throw new Error(/already/i.test(error.message) ? 'Такое имя уже занято' : error.message);
-    const { error: e2 } = await sb.auth.signInWithPassword({ email, password });
-    if (e2) throw new Error(e2.message);
-  } else {
-    const { error } = await sb.auth.signInWithPassword({ email, password });
-    if (error) throw new Error('Неверное имя или пароль');
-  }
+  if (!/^[a-z0-9_.\-]{3,20}$/.test(name)) throw new Error('Логин: 3–20 символов, латиница, цифры, _ . -');
+  const { error } = await sb.rpc('ensure_profile', { uname: name, code: $('#acode').value });
+  if (error) throw new Error(/duplicate/i.test(error.message) ? 'Такой логин уже занят' : error.message);
   await loadMe();
-  if (!me) {
-    // Запасной путь: профиль не создался триггером, создаём его функцией в базе
-    const { error: e3 } = await sb.rpc('ensure_profile', { uname: name, code });
-    if (e3) throw new Error(e3.message);
-    await loadMe();
-  }
-  if (!me) throw new Error('Вход выполнен, но профиль не найден. Выполните supabase.sql ещё раз.');
+  if (!me) throw new Error('Не удалось создать профиль. Обновите страницу.');
   toast('Добро пожаловать, ' + me.name);
   go({ name: 'feed', tab: 'all' });
 }
@@ -651,18 +647,22 @@ async function saveAdmin(name) {
 document.addEventListener('click', async (e) => {
   const t = (sel) => e.target.closest(sel);
   try {
-    if (t('#authGo')) {
-      const err = $('#gateErr');
-      if (err) err.textContent = 'Отправляю…';
-      try {
-        await authSubmit();
-      } catch (er) {
-        if (err) err.textContent = er.message;
-        toast(er.message);
-      }
+    if (t('[data-oauth]')) {
+      const el = $('#gateErr');
+      try { await oauthLogin(t('[data-oauth]').dataset.oauth); } catch (er) { if (el) el.textContent = er.message; }
       return;
     }
-    if (t('#authSwitch')) return renderGate(gateMode === 'reg' ? 'login' : 'reg');
+    if (t('#nameGo')) {
+      const el = $('#gateErr');
+      try { await saveName(); } catch (er) { if (el) el.textContent = er.message; toast(er.message); }
+      return;
+    }
+    if (t('[data-logout]')) {
+      await sb.auth.signOut();
+      me = null;
+      needName = false;
+      return render();
+    }
     if (t('[data-go]')) return go({ name: t('[data-go]').dataset.go, tab: 'all', user: null });
     if (t('#newBtn') || t('#tabNew')) { go({ name: 'feed', tab: 'all' }); setTimeout(() => $('#ptext')?.focus(), 200); return; }
     if (t('[data-tab]')) { route.tab = t('[data-tab]').dataset.tab; return renderFeed(); }
