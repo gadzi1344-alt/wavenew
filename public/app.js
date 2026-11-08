@@ -31,13 +31,14 @@ let feedBefore = null;
 let pendingImg = '';
 let gateMode = 'reg';
 let adminList = [];
+let focusComments = false;
 
 // ---------- Вспомогательное ----------
 const hue = (s) => [...s].reduce((h, c) => (h * 31 + c.charCodeAt(0)) % 360, 0);
 const av = (u, cls = 'av') => u.avatar
   ? `<div class="${cls}" style="background-image:url('${esc(u.avatar)}')"></div>`
-  : `<div class="${cls}" style="background:linear-gradient(135deg,hsl(${hue(u.name)} 60% 50%),hsl(${hue(u.name) + 50} 60% 30%))">${esc(u.name[0].toUpperCase())}</div>`;
-const VERIFIED_SVG = '<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="vfg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#a78bfa"/><stop offset="1" stop-color="#22d3ee"/></linearGradient></defs><polygon points="12.00,1.60 14.30,3.40 17.20,2.99 18.29,5.71 21.01,6.80 20.60,9.70 22.40,12.00 20.60,14.30 21.01,17.20 18.29,18.29 17.20,21.01 14.30,20.60 12.00,22.40 9.70,20.60 6.80,21.01 5.71,18.29 2.99,17.20 3.40,14.30 1.60,12.00 3.40,9.70 2.99,6.80 5.71,5.71 6.80,2.99 9.70,3.40" fill="url(#vfg)" stroke="url(#vfg)" stroke-width="1.2" stroke-linejoin="round"/><path d="M7.9 12.4l2.7 2.7 5.5-5.6" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  : `<div class="${cls}" style="background:#1f1f1f;box-shadow:inset 0 0 0 1px #2e2e2e">${esc(u.name[0].toUpperCase())}</div>`;
+const VERIFIED_SVG = '<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><polygon points="12.00,1.60 14.30,3.40 17.20,2.99 18.29,5.71 21.01,6.80 20.60,9.70 22.40,12.00 20.60,14.30 21.01,17.20 18.29,18.29 17.20,21.01 14.30,20.60 12.00,22.40 9.70,20.60 6.80,21.01 5.71,18.29 2.99,17.20 3.40,14.30 1.60,12.00 3.40,9.70 2.99,6.80 5.71,5.71 6.80,2.99 9.70,3.40" fill="#ffffff" stroke="#ffffff" stroke-width="1.2" stroke-linejoin="round"/><path d="M7.9 12.4l2.7 2.7 5.5-5.6" fill="none" stroke="#000" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 const verify = (u) => u.verified ? `<span class="vf" title="Подтверждённый аккаунт">${VERIFIED_SVG}</span>` : '';
 const badges = (u) => (u.badges || []).map((b) => `<span class="bd" title="${esc(BADGE_LABEL[b] || '')}">${BADGE[b] || ''}</span>`).join('');
 const ago = (ts) => {
@@ -152,7 +153,7 @@ function renderNameChoice() {
   $('#main').innerHTML = `<div class="gate-wrap"><div class="card gate-card">
     <div class="gate-logo">W</div>
     <h2>Выберите логин</h2>
-    <p class="sub">Так вас будут видеть в ленте. Латиница, цифры, _ . - (3–20 символов). Потом логин не меняется.</p>
+    <p class="sub">Так вас будут видеть в ленте. Латиница, цифры, _ . - (3–20 символов). Ник можно поменять в профиле.</p>
     <input class="field" id="aname" placeholder="Логин" autocomplete="off">
     <input class="field" id="acode" placeholder="Код администратора (только для админа)" autocomplete="off">
     <div class="sub" id="gateErr" style="color:#d97070;min-height:16px"></div>
@@ -188,8 +189,8 @@ function composer() {
     <div class="sub" id="pstatus" style="margin-top:8px;color:#d97070;min-height:16px"></div>
   </div>`;
 }
-function postCard(p) {
-  return `<article class="card" data-open="${p.id}">
+function postCard(p, i = 0) {
+  return `<article class="card" data-open="${p.id}" style="--i:${i}">
     <div class="ph-head">
       ${av(p.author, 'av sm')}
       <div class="who"><span class="nm" data-user="${esc(p.author.name)}">${esc(p.author.name)}${verify(p.author)}${badges(p.author)}</span><span class="tm">${ago(p.created)}</span></div>
@@ -199,7 +200,7 @@ function postCard(p) {
     ${p.image ? `<img class="pimg" src="${esc(p.image)}" loading="lazy" alt="">` : ''}
     <div class="acts2">
       <button data-like="${p.id}" class="${p.liked ? 'on' : ''}">${HEART}<b>${p.likes}</b></button>
-      <span>${COMMENT}${p.comments}</span>
+      <button data-cmt="${p.id}" title="Комментарии">${COMMENT}<b>${p.comments}</b></button>
       <span>${EYE}${p.views}</span>
     </div>
   </article>`;
@@ -252,11 +253,12 @@ async function loadFeed() {
     }));
     const feedEl = $('#feed');
     if (!feedEl) return;
+    const offset = first ? 0 : feedEl.querySelectorAll(':scope > .card').length;
     if (first) feedEl.innerHTML = '';
     if (first && !posts.length) {
       feedEl.innerHTML = `<p class="sub center">${route.tab === 'follow' ? 'Подпишитесь на людей, чтобы видеть их посты' : 'Пока пусто. Напишите первый пост!'}</p>`;
     } else {
-      feedEl.insertAdjacentHTML('beforeend', posts.map(postCard).join(''));
+      feedEl.insertAdjacentHTML('beforeend', posts.map((p, i) => postCard(p, offset + i)).join(''));
       watchViews(feedEl);
     }
     feedBefore = posts.length ? posts[posts.length - 1].id : feedBefore;
@@ -358,11 +360,16 @@ async function renderPost(id) {
     ${comments.map((c) => `<div class="card" style="padding:12px 14px">
       <div class="ph-head">${av(c.author, 'av sm')}<div class="who"><span class="nm" data-user="${esc(c.author.name)}">${esc(c.author.name)}${verify(c.author)}${badges(c.author)}</span><span class="tm">${ago(c.created)}</span></div></div>
       <p class="txt" style="margin:8px 0 0">${esc(c.text)}</p></div>`).join('') || '<p class="sub">Комментариев пока нет</p>'}
-    <div class="card comp" style="margin-top:14px">
+    <div class="card comp post-comp">
       <textarea id="ctext" maxlength="500" placeholder="Ваш комментарий"></textarea>
       <div class="comp-row"><span class="grow"></span><button class="pill on" data-comment="${post.id}">Отправить</button></div>
     </div>
   </div>`;
+  if (focusComments) {
+    focusComments = false;
+    const ta = $('#ctext');
+    if (ta) setTimeout(() => { ta.scrollIntoView({ block: 'end', behavior: 'smooth' }); ta.focus({ preventScroll: true }); }, 60);
+  }
 }
 
 // ---------- Профиль ----------
@@ -380,7 +387,7 @@ function paintProfile(u, data, isMe) {
           <div class="stats"><span><b>${n('posts_count')}</b>постов</span><span><b>${n('followers')}</b>подписчиков</span><span><b>${n('following')}</b>подписок</span></div>
           <p class="bio">${esc(u.bio) || (isMe ? '<span class="sub">Расскажите о себе</span>' : '')}</p>
           <div class="acts">
-            ${isMe ? `<button class="pill" id="editBio">Изменить описание</button>
+            ${isMe ? `<button class="pill" id="editProf">Редактировать профиль</button>
               <button class="pill" id="logout">Выйти</button>
               ${canAdmin ? '<button class="pill on" data-go="admin">Админ-панель</button>' : ''}`
               : me ? `<button class="pill ${isFollowing ? '' : 'on'}" data-follow="${esc(u.name)}">${isFollowing ? 'Отписаться' : 'Подписаться'}</button>` : ''}
@@ -428,6 +435,90 @@ async function toggleFollow(name) {
   if (ex && ex.length) await sb.from('follows').delete().eq('follower_id', me.id).eq('followee_id', t.id);
   else await sb.from('follows').insert({ follower_id: me.id, followee_id: t.id });
   renderProfile(name);
+}
+
+// ---------- Редактирование профиля: ник, описание, аватар ----------
+function openEditor() {
+  if (!me || document.querySelector('.modal')) return;
+  let pickedFile = null;
+  let previewUrl = '';
+  const ov = document.createElement('div');
+  ov.className = 'modal';
+  ov.innerHTML = `<div class="sheet" role="dialog" aria-modal="true" aria-label="Редактировать профиль">
+    <div class="sheet-head">
+      <button class="x" data-close title="Закрыть">×</button>
+      <b>Профиль</b>
+      <button class="pill on" data-save>Сохранить</button>
+    </div>
+    <label class="ed-av" title="Сменить фото">
+      <span id="edPrev">${av(me, 'av xl')}</span>
+      <span class="sub">Нажмите, чтобы сменить фото</span>
+      <input type="file" id="edFile" accept="image/*" hidden>
+    </label>
+    <label class="lbl">Ник
+      <input class="field" id="edName" maxlength="20" value="${esc(me.name)}" autocomplete="off" ${me.admin ? 'disabled' : ''}>
+    </label>
+    <div class="sub">Латиница, цифры, _ . - (3–20 символов).${me.admin ? ' Ник администратора менять нельзя.' : ''}</div>
+    <label class="lbl">Описание
+      <textarea class="field" id="edBio" maxlength="200" rows="4">${esc(me.bio)}</textarea>
+    </label>
+    <div class="sub" id="edCount" style="text-align:right">${esc(me.bio).length}/200</div>
+    <div class="sub" id="edErr" style="color:#e07070;min-height:16px"></div>
+  </div>`;
+  document.body.appendChild(ov);
+
+  const onKey = (e) => { if (e.key === 'Escape') close(); };
+  const close = () => {
+    document.removeEventListener('keydown', onKey);
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    ov.classList.add('out');
+    setTimeout(() => ov.remove(), 220);
+  };
+  document.addEventListener('keydown', onKey);
+  ov.addEventListener('click', (e) => {
+    if (e.target === ov || e.target.closest('[data-close]')) close();
+  });
+  ov.querySelector('#edBio').addEventListener('input', (e) => {
+    ov.querySelector('#edCount').textContent = e.target.value.length + '/200';
+  });
+  ov.querySelector('#edFile').addEventListener('change', (e) => {
+    const f = e.target.files[0];
+    if (!f) return;
+    if (!f.type.startsWith('image/')) return toast('Можно загружать только картинки');
+    if (f.size > 8 * 1024 * 1024) return toast('Файл больше 8 МБ');
+    pickedFile = f;
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    previewUrl = URL.createObjectURL(f);
+    ov.querySelector('#edPrev').innerHTML = `<div class="av xl" style="background-image:url('${previewUrl}')"></div>`;
+  });
+  ov.querySelector('[data-save]').addEventListener('click', async (e) => {
+    const btn = e.currentTarget;
+    const errEl = ov.querySelector('#edErr');
+    const name = ov.querySelector('#edName').value.trim().toLowerCase();
+    const bio = ov.querySelector('#edBio').value.slice(0, 200);
+    errEl.textContent = '';
+    btn.disabled = true;
+    try {
+      if (name !== me.name) {
+        if (me.admin) throw new Error('Ник администратора менять нельзя');
+        if (!/^[a-z0-9_.\-]{3,20}$/.test(name)) throw new Error('Ник: 3–20 символов, латиница, цифры, _ . -');
+        const { error } = await sb.rpc('change_username', { new_name: name });
+        if (error) throw new Error(/duplicate/i.test(error.message) ? 'Такой ник уже занят' : error.message);
+      }
+      const patch = { bio };
+      if (pickedFile) patch.avatar_url = await uploadImage(pickedFile);
+      const { error: upErr } = await sb.from('profiles').update(patch).eq('id', me.id);
+      if (upErr) throw new Error(upErr.message);
+      await loadMe();
+      close();
+      toast('Профиль сохранён');
+      go({ name: 'profile', user: null });
+    } catch (err) {
+      errEl.textContent = err.message;
+    } finally {
+      btn.disabled = false;
+    }
+  });
 }
 
 // ---------- Поиск ----------
@@ -555,14 +646,9 @@ document.addEventListener('click', async (e) => {
     }
     if (t('[data-user]')) { e.stopPropagation(); return go({ name: 'profile', user: t('[data-user]').dataset.user }); }
     if (t('[data-follow]')) return toggleFollow(t('[data-follow]').dataset.follow);
+    if (t('[data-cmt]')) { e.stopPropagation(); focusComments = true; return go({ name: 'post', id: Number(t('[data-cmt]').dataset.cmt) }); }
     if (t('[data-open]')) return go({ name: 'post', id: Number(t('[data-open]').dataset.open) });
-    if (t('#editBio')) {
-      const bio = prompt('Описание профиля (до 200 символов)', me.bio || '');
-      if (bio === null) return;
-      const { error } = await sb.from('profiles').update({ bio: bio.slice(0, 200) }).eq('id', me.id);
-      if (error) throw new Error(error.message);
-      return renderProfile();
-    }
+    if (t('#editProf')) return openEditor();
     if (t('#logout')) {
       await sb.auth.signOut();
       me = null;

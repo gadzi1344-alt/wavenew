@@ -179,25 +179,12 @@
     .brand{position:absolute;top:24px;left:0;right:0;padding:0;text-align:center}
   }
 
-/* ===================== v2: анимации, акценты, сайдбар ===================== */
-:root{
-  --accent:#7c6cff;
-  --accent2:#22d3ee;
-  --grad:linear-gradient(135deg,#7c6cff 0%,#22d3ee 100%);
-  --spring:cubic-bezier(.34,1.56,.64,1);
-}
+/* ===================== v3: монохром, анимации, редактор, связь постов ===================== */
+:root{ --spring: cubic-bezier(.34,1.56,.64,1); }
 
-/* Логотип с бегущим градиентом */
-.brand{
-  background:linear-gradient(90deg,#ffffff,var(--accent2),var(--accent),#ffffff);
-  background-size:300% auto;
-  -webkit-background-clip:text;background-clip:text;color:transparent;
-  animation:shine 7s linear infinite;
-}
-@keyframes shine{to{background-position:300% center}}
-
-/* Сайдбар (компьютер): иконка заметно растёт при наведении и выборе */
-.nav button{position:relative;animation:navIn .6s var(--ease) both}
+/* Логотип и переходы сайдбара */
+.brand{color:#fff;letter-spacing:-.6px}
+.nav button{position:relative;animation:navIn .6s var(--ease) backwards}
 .nav button:nth-child(2){animation-delay:70ms}
 .nav button:nth-child(3){animation-delay:140ms}
 .nav button:nth-child(4){animation-delay:210ms}
@@ -206,74 +193,96 @@
 .nav button svg,.tabbar button svg{transition:transform .45s var(--spring)}
 .nav button:hover svg{transform:scale(1.28) rotate(-6deg)}
 .nav button:active svg,.tabbar button:active svg{transform:scale(.88)}
-.nav button.active{
-  background:var(--grad);color:#fff;
-  box-shadow:0 10px 26px -8px #7c6cff99,inset 0 0 0 1px #ffffff26;
-}
+.nav button.active{background:#fff;color:#000;box-shadow:0 10px 26px -10px #ffffff66}
 .nav button.active svg{transform:scale(1.16)}
 .nav button.active:hover svg{transform:scale(1.3) rotate(-6deg)}
-/* точка под активным пунктом */
-.nav button::after{
-  content:"";position:absolute;bottom:-6px;left:50%;width:4px;height:4px;margin-left:-2px;
-  border-radius:50%;background:var(--accent2);opacity:0;transform:scale(0);
-  transition:transform .4s var(--spring),opacity .3s;
-}
-.nav button.active::after{opacity:0}
-
-/* Нижняя панель (телефон) */
 .tabbar button.active svg{transform:scale(1.22)}
-.tabbar button{transition:color .3s}
-.tabbar button.active .ic{background:var(--grad);box-shadow:0 8px 20px -6px #7c6cff99}
-.tabbar .mid .ic{background:var(--grad);color:#fff}
-.tabbar .mid svg{stroke:#fff}
+.tabbar button.active .ic{background:#fff;color:#000}
+.tabbar .mid .ic{background:#fff;color:#000}
+.tabbar .mid svg{stroke:#000}
 .tabbar button:not(.mid):hover .ic{background:#ffffff14}
 
-/* Галочка: мягкое свечение и поворот при наведении */
-.vf{position:relative;transition:transform .4s var(--spring)}
-.vf svg{filter:drop-shadow(0 0 6px #7c6cff66);transition:transform .5s var(--spring)}
+/* Галочка */
+.vf{transition:transform .4s var(--spring);animation:vfIn .6s var(--spring) backwards}
+.vf svg{filter:drop-shadow(0 0 4px #ffffff40);transition:transform .5s var(--spring)}
 .vf:hover svg{transform:scale(1.25) rotate(12deg)}
-.vf{animation:vfIn .6s var(--spring) both}
 @keyframes vfIn{from{transform:scale(0) rotate(-40deg)}to{transform:none}}
 
-/* Карточки и списки */
-.urow{transition:transform .35s var(--ease),border-color .25s,background .25s}
-.urow:hover{transform:translateX(4px);border-color:#2c2c44;background:var(--surface2)}
-.card{border-radius:22px}
-.card:hover{border-color:#2a2a3c}
-.acts2 button svg,.acts2 span svg{transition:transform .35s var(--spring)}
-.acts2 button:hover svg{transform:scale(1.25)}
+/* Кнопки и переключатели: чёрное на белом */
 .pill,.buy,.chip,.switch,.attach{transition:background .25s,color .25s,transform .25s var(--spring),box-shadow .3s,border-color .25s}
-.pill:hover{transform:translateY(-1px);box-shadow:0 8px 20px -10px #7c6cff88}
-.pill.on:hover{box-shadow:0 10px 26px -8px #7c6cff99}
-.pill.on{background:var(--grad);color:#fff;border-color:transparent}
-.pills button.on{background:var(--grad);color:#fff}
-.newbtn{background:var(--grad);color:#fff;box-shadow:0 10px 26px -10px #7c6cff}
-.newbtn:hover{box-shadow:0 14px 30px -8px #7c6cff}
+.pill:hover{transform:translateY(-1px);box-shadow:0 8px 20px -12px #ffffff55}
+.pill.on,.pills button.on,.switch.on,.newbtn{background:#fff;color:#000;border-color:#fff}
+.pill.on:hover{box-shadow:0 10px 26px -10px #ffffff66}
+.newbtn{box-shadow:none}
+.newbtn:hover{box-shadow:0 12px 28px -10px #ffffff66}
 .chip:hover{transform:scale(1.08)}
 .chip.on{transform:scale(1.04)}
-.switch.on{background:var(--grad);color:#fff;border-color:transparent}
+.urow{transition:transform .35s var(--ease),border-color .25s,background .25s}
+.urow:hover{transform:translateX(4px);border-color:#333;background:var(--surface2)}
+
+/* Лента: посты появляются по очереди и соединяются линией */
+#feed .card{position:relative;animation:cardIn .6s var(--ease) backwards}
+#feed .card:nth-child(n){animation-delay:calc(var(--i,0) * 90ms)}
+#feed .card:not(:last-child)::after{
+  content:"";position:absolute;left:50%;bottom:-14px;width:1px;height:14px;margin-left:-.5px;
+  background:#3a3a3a;transform:scaleY(0);transform-origin:top;
+  animation:linkGrow .45s var(--ease) forwards;
+  animation-delay:calc(var(--i,0) * 90ms + 380ms);
+}
+#feed .card:not(:last-child)::before{
+  content:"";position:absolute;left:50%;bottom:-10px;width:6px;height:6px;margin-left:-3px;
+  border-radius:50%;background:#fff;opacity:0;transform:scale(0);
+  animation:dotIn .3s var(--spring) forwards;
+  animation-delay:calc(var(--i,0) * 90ms + 760ms);
+}
+@keyframes linkGrow{to{transform:scaleY(1)}}
+@keyframes dotIn{to{opacity:1;transform:scale(1)}}
+
+/* Кнопка комментариев и лайк */
+.acts2 button[data-cmt]{color:var(--muted)}
+.acts2 button.on{color:#fff}
+.acts2 button.on svg{fill:currentColor}
+.acts2 button:hover svg{transform:scale(1.2)}
+.acts2 svg{transition:transform .35s var(--spring)}
+
+/* Страница поста: поле комментария закреплено внизу */
+.post-comp{position:sticky;bottom:14px;z-index:5;background:#151515f2;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);box-shadow:0 -12px 30px -12px #000}
 
 /* Поля ввода */
-.field:focus{border-color:var(--accent);box-shadow:0 0 0 4px #7c6cff26}
+.field:focus{border-color:#555;box-shadow:0 0 0 4px #ffffff14}
 
-/* Аватар и обложка профиля */
+/* Аватары */
 .av{box-shadow:0 0 0 2px var(--bg)}
-.card:hover .av{box-shadow:0 0 0 2px var(--bg),0 0 0 4px #7c6cff40}
+.card:hover .av{box-shadow:0 0 0 2px var(--bg),0 0 0 4px #ffffff26}
 
-/* Всплывающие уведомления */
-.toast{animation:toastIn .5s var(--spring) both;box-shadow:0 14px 40px -10px #000c}
+/* Уведомления */
+.toast{animation:toastIn .5s var(--spring) backwards;box-shadow:0 14px 40px -10px #000c}
 @keyframes toastIn{from{opacity:0;transform:translateY(-12px) scale(.94)}to{opacity:1;transform:none}}
 
 /* Экран входа */
-.gate-logo{background:var(--grad);color:#fff;box-shadow:0 14px 34px -10px #7c6cff;animation:floaty 4s ease-in-out infinite}
+.gate-logo{background:#fff;color:#000;box-shadow:0 14px 34px -12px #ffffff40;animation:floaty 4s ease-in-out infinite}
 @keyframes floaty{0%,100%{transform:translateY(0) rotate(0)}50%{transform:translateY(-6px) rotate(-4deg)}}
-.gate-card{box-shadow:0 30px 80px -30px #000}
 
-/* Плавный фон при прокрутке и выделение текста */
-::selection{background:#7c6cff55}
+/* Редактор профиля */
+.modal{position:fixed;inset:0;z-index:60;display:grid;place-items:center;padding:16px;background:#000b;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);animation:fadeIn .25s ease backwards;transition:opacity .2s}
+.modal.out{opacity:0}
+.modal.out .sheet{transform:scale(.96) translateY(8px);transition:transform .2s}
+.sheet{width:min(440px,100%);max-height:90vh;overflow:auto;background:var(--surface);border:1px solid #2a2a2a;border-radius:24px;padding:18px;display:flex;flex-direction:column;gap:14px;box-shadow:0 30px 80px -20px #000;animation:sheetIn .45s var(--spring) backwards}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+@keyframes sheetIn{from{opacity:0;transform:translateY(20px) scale(.96)}to{opacity:1;transform:none}}
+.sheet-head{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.sheet-head b{font-size:16px}
+.ed-av{display:flex;flex-direction:column;align-items:center;gap:8px;cursor:pointer}
+.ed-av .av{transition:filter .25s}
+.ed-av:hover .av{filter:brightness(.7)}
+.lbl{display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--muted)}
+.lbl .field{color:var(--txt)}
+.lbl textarea.field{resize:vertical;min-height:96px}
+.sheet .sub{font-size:12px}
+
+::selection{background:#ffffff40;color:#fff}
 main{scrollbar-width:thin;scrollbar-color:#2a2a2a transparent}
 
-/* Уважаем настройку «уменьшить движение» */
 @media (prefers-reduced-motion: reduce){
   *,*::before,*::after{animation-duration:.01ms !important;animation-iteration-count:1 !important;transition-duration:.01ms !important}
 }
