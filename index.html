@@ -426,7 +426,7 @@ async function renderFeed() {
     <h2>Лента</h2>
     <div class="pills" style="margin-top:14px"><button data-tab="all" class="${tab === 'all' ? 'on' : ''}">Для вас</button><button data-tab="follow" class="${tab === 'follow' ? 'on' : ''}">Подписки</button></div>
     ${tab === 'all' ? composer() : ''}
-    <div id="feed"><p class="sub center">Загрузка…</p></div>
+    <div id="feed"></div>
     <div class="more" id="moreBox"></div>
   </div>`;
   $('#publish').onclick = publishPost;
@@ -469,17 +469,27 @@ async function publishPost() {
   status.textContent = '';
   if (!text && !pendingImg) { status.textContent = 'Напишите текст или добавьте фото'; return; }
   btn.disabled = true;
-  btn.textContent = 'Публикуем…';
   try {
-    const { error } = await sb.from('posts').insert({ user_id: me.id, text, image_url: pendingImg });
+    const { data, error } = await sb.from('posts').insert({ user_id: me.id, text, image_url: pendingImg }).select(POST_COLS).single();
     if (error) throw new Error(error.message);
+    const post = mapPost(data, {
+      profile: { id: me.id, name: me.name, verified: me.verified, badges: me.badges, avatar_url: me.avatar },
+      likes: 0, comments: 0, liked: new Set(),
+    });
+    const feedEl = $('#feed');
+    if (feedEl) {
+      feedEl.querySelectorAll(':scope > .sub').forEach((el) => el.remove());
+      feedEl.insertAdjacentHTML('afterbegin', postCard(post));
+      watchViews(feedEl);
+    }
+    $('#ptext').value = '';
     pendingImg = '';
-    await renderFeed();
+    $('#pthumb').innerHTML = '';
     toast('Пост опубликован');
   } catch (e) {
     status.textContent = 'Не опубликовалось: ' + e.message;
+  } finally {
     btn.disabled = false;
-    btn.textContent = 'Опубликовать';
   }
 }
 
@@ -556,15 +566,14 @@ async function renderProfile(name) {
   const u = mapUser(p);
   const isMe = !!me && me.id === u.id;
   const count = async (q) => (await q).count || 0;
-  const followers = await count(sb.from('follows').select('*', { count: 'exact', head: true }).eq('followee_id', u.id));
-  const following = await count(sb.from('follows').select('*', { count: 'exact', head: true }).eq('follower_id', u.id));
-  const postsN = await count(sb.from('posts').select('*', { count: 'exact', head: true }).eq('user_id', u.id));
-  let isFollowing = false;
-  if (me && !isMe) {
-    const { data: f } = await sb.from('follows').select('follower_id').eq('follower_id', me.id).eq('followee_id', u.id);
-    isFollowing = !!(f && f.length);
-  }
-  const posts = await postsWith(sb.from('posts').select(POST_COLS).eq('user_id', u.id).order('id', { ascending: false }).limit(FEED_LIMIT));
+  const [followers, following, postsN, follow, posts] = await Promise.all([
+    count(sb.from('follows').select('*', { count: 'exact', head: true }).eq('followee_id', u.id)),
+    count(sb.from('follows').select('*', { count: 'exact', head: true }).eq('follower_id', u.id)),
+    count(sb.from('posts').select('*', { count: 'exact', head: true }).eq('user_id', u.id)),
+    me && !isMe ? sb.from('follows').select('follower_id').eq('follower_id', me.id).eq('followee_id', u.id) : Promise.resolve({ data: [] }),
+    postsWith(sb.from('posts').select(POST_COLS).eq('user_id', u.id).order('id', { ascending: false }).limit(FEED_LIMIT)),
+  ]);
+  const isFollowing = !!(follow.data && follow.data.length);
   const canAdmin = isMe && me.admin;
   $('#main').innerHTML = `<div class="col">
     <div class="card" style="padding:22px">
