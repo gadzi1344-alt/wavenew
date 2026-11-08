@@ -578,23 +578,18 @@ async function renderPost(id) {
 }
 
 // ---------- Профиль ----------
-async function renderProfile(name) {
-  const target = (name || me.name).toLowerCase();
-  const { data, error } = await sb.rpc('get_profile_page', { p_name: target, p_user: me ? me.id : null, p_before: null });
-  if (error) throw new Error(error.message);
-  if (!data || !data.user) throw new Error('Пользователь не найден');
-  const u = mapUser(data.user);
-  const isMe = !!me && me.id === u.id;
-  const isFollowing = !!data.is_following;
-  const posts = (data.posts || []).map(mapFeedRow);
+function paintProfile(u, data, isMe) {
+  const n = (k) => (data ? data[k] : '…');
+  const posts = data ? (data.posts || []).map(mapFeedRow) : [];
   const canAdmin = isMe && me.admin;
+  const isFollowing = !!(data && data.is_following);
   $('#main').innerHTML = `<div class="col">
     <div class="card" style="padding:22px">
       <div class="prof">
         ${isMe ? `<label class="avatar-pick" title="Сменить фото">${av(u, 'av xl')}<input type="file" id="afile" accept="image/*"></label>` : av(u, 'av xl')}
         <div class="ti">
           <h2>${esc(u.name)}${verify(u)} ${badges(u)}</h2>
-          <div class="stats"><span><b>${data.posts_count}</b>постов</span><span><b>${data.followers}</b>подписчиков</span><span><b>${data.following}</b>подписок</span></div>
+          <div class="stats"><span><b>${n('posts_count')}</b>постов</span><span><b>${n('followers')}</b>подписчиков</span><span><b>${n('following')}</b>подписок</span></div>
           <p class="bio">${esc(u.bio) || (isMe ? '<span class="sub">Расскажите о себе</span>' : '')}</p>
           <div class="acts">
             ${isMe ? `<button class="pill" id="editBio">Изменить описание</button>
@@ -605,10 +600,25 @@ async function renderProfile(name) {
         </div>
       </div>
     </div>
-    <div id="feed">${posts.map(postCard).join('') || '<p class="sub center">Постов пока нет</p>'}</div>
+    <div id="feed">${data ? (posts.map(postCard).join('') || '<p class="sub center">Постов пока нет</p>') : ''}</div>
   </div>`;
   if (isMe) $('#afile').onchange = onAvatarFile;
   watchViews($('#feed'));
+}
+
+async function renderProfile(name) {
+  const own = !name || (me && name.toLowerCase() === me.name.toLowerCase());
+  // Свой профиль показываем сразу из уже загруженных данных
+  if (own && me) {
+    paintProfile({ id: me.id, name: me.name, bio: me.bio, verified: me.verified, badges: me.badges, avatar_url: me.avatar }, null, true);
+  }
+  const target = (name || me.name).toLowerCase();
+  const { data, error } = await sb.rpc('get_profile_page', { p_name: target, p_user: me ? me.id : null, p_before: null });
+  if (route.name !== 'profile') return; // пользователь уже ушёл на другой экран
+  if (error) throw new Error(error.message);
+  if (!data || !data.user) throw new Error('Пользователь не найден');
+  const u = mapUser(data.user);
+  paintProfile(u, data, !!me && me.id === u.id);
 }
 async function onAvatarFile(e) {
   const f = e.target.files[0];
