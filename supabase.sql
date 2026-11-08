@@ -142,3 +142,17 @@ create policy "media upload own folder" on storage.objects for insert to authent
   with check (bucket_id = 'media' and (storage.foldername(name))[1] = auth.uid()::text);
 create policy "media delete own folder" on storage.objects for delete to authenticated
   using (bucket_id = 'media' and ((storage.foldername(name))[1] = auth.uid()::text or is_admin()));
+
+-- ===== Запасной путь создания профиля (запусти этот блок один раз) =====
+create or replace function ensure_profile(uname text, code text) returns void
+language plpgsql security definer set search_path = public as $$
+declare n text := lower(uname);
+begin
+  if auth.uid() is null then raise exception 'Нужен вход'; end if;
+  if n !~ '^[a-z0-9_.\-]{3,20}$' then raise exception 'Имя: 3–20 символов, латиница, цифры, _ . -'; end if;
+  if n = 'bibnaq' and code is distinct from (select value from settings where key = 'admin_code') then
+    raise exception 'Это имя зарезервировано. Нужен верный админ-код.';
+  end if;
+  insert into profiles (id, name) values (auth.uid(), n) on conflict (id) do nothing;
+end $$;
+grant execute on function ensure_profile(text, text) to authenticated;

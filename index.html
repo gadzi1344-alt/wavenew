@@ -345,12 +345,13 @@ function renderGate(mode) {
 async function authSubmit() {
   const name = $('#aname').value.trim().toLowerCase();
   const password = $('#apass').value;
+  const code = $('#acode')?.value || '';
   if (!/^[a-z0-9_.\-]{3,20}$/.test(name)) throw new Error('Имя: 3–20 символов, латиница, цифры, _ . -');
   if (password.length < 6) throw new Error('Пароль: минимум 6 символов');
   if (!sb) throw new Error('Нет связи с Supabase. Обновите страницу.');
   const email = `${name}@wave.app`;
   if (gateMode === 'reg') {
-    const { error } = await sb.auth.signUp({ email, password, options: { data: { name, code: $('#acode').value } } });
+    const { error } = await sb.auth.signUp({ email, password, options: { data: { name, code } } });
     if (error) throw new Error(/already/i.test(error.message) ? 'Такое имя уже занято' : error.message);
     const { error: e2 } = await sb.auth.signInWithPassword({ email, password });
     if (e2) throw new Error(e2.message);
@@ -359,6 +360,13 @@ async function authSubmit() {
     if (error) throw new Error('Неверное имя или пароль');
   }
   await loadMe();
+  if (!me) {
+    // Запасной путь: профиль не создался триггером, создаём его функцией в базе
+    const { error: e3 } = await sb.rpc('ensure_profile', { uname: name, code });
+    if (e3) throw new Error(e3.message);
+    await loadMe();
+  }
+  if (!me) throw new Error('Вход выполнен, но профиль не найден. Выполните supabase.sql ещё раз.');
   toast('Добро пожаловать, ' + me.name);
   go({ name: 'feed', tab: 'all' });
 }
